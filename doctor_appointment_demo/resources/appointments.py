@@ -7,10 +7,21 @@ import falcon
 from marshmallow import fields, validate, Schema
 
 from doctor_appointment_demo.core import DR_CHRONO_HOST
+from doctor_appointment_demo.libs.errors import AppointmentException
 from doctor_appointment_demo.libs.utils import get_and_validate_schema
+from doctor_appointment_demo.services import appointment_service
 
 
 patient_id = 92829633
+
+GENDERS = ['Male', 'Female', 'Other']
+
+
+class PatientSchema(Schema):
+    first_name = fields.String(required=True)
+    last_name = fields.String(required=True)
+    email = fields.Email(required=True)
+    gender = fields.String(required=True, validate=validate.OneOf(GENDERS))
 
 
 class AppointmentPostSchema(Schema):
@@ -19,6 +30,7 @@ class AppointmentPostSchema(Schema):
     office_id = fields.Integer(required=True, validate=validate.Range(min=0))
     date = fields.Date(missing=date.today())
     time = fields.Time(missing=time(9))
+    patient = fields.Nested(PatientSchema, required=True)
 
 
 class AppointmentCollection:
@@ -27,49 +39,10 @@ class AppointmentCollection:
 
     def on_post(self, req, resp):
         params = get_and_validate_schema(AppointmentPostSchema, req)
-        office_appointments_response = req.context.session.get(self.appointments_url, params={
-            'doctor': params['doctor_id'],
-            'office': params['office_id'],
-            'date': params['date'].isoformat()
-        })
 
-        if office_appointments_response:
-            appointments = office_appointments_response.json()['results']
-            exam_room_time_map = self._make_exam_room_time_map(appointments)
-            date = params['date'].isoformat()
-            time = params['time'].isoformat()
-
-            for _exam_room, scheduled_times in exam_room_time_map.items():
-                if time not in scheduled_times:
-                    exam_room = _exam_room
-                    break
-
-            if exam_room:
-                response = req.context.session.post(self.appointments_url, data={
-                    'doctor': params['doctor_id'],
-                    'office': params['office_id'],
-                    'exam_room': exam_room,
-                    'patient': patient_id,
-                    'scheduled_time': f'{date}T{time}',
-                    'duration': 30  # in minutes
-                })
-                resp.media = response.json()
-
-                return
-
-        raise falcon.HTTPUnprocessableEntity('No open appointments found for these parameters')
-
-    @staticmethod
-    def _make_exam_room_time_map(appointments: List[dict]):
-        exam_room_time_map = defaultdict(dict)
-
-        for appointment in appointments:
-            exam_room = appointment['exam_room']
-            scheduled_time = appointment['scheduled_time'].split('T')[1]
-
-            if not exam_room_time_map[exam_room]:
-                exam_room_time_map[exam_room] = []
-
-            exam_room_time_map[exam_room].append(scheduled_time)
-
-        return exam_room_time_map
+        try:
+            resp.media = appointment_service.make_and_get_an_appoinment(
+                params, req.context.session
+            )
+        except AppointmentException as e:
+            raise falcon.HTTPUnprocessableEntity(e.args[0]) from e
