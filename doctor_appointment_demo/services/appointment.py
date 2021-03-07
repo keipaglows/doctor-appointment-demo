@@ -47,12 +47,12 @@ class AppointmentService:
 
         raise AppointmentException('Could not receive appointments')
 
-    def _get_exam_room_id(self, time: str, appointments: List[dict]) -> int:
+    def _get_exam_room_id(self, schedule_time: str, appointments: List[dict]) -> int:
         exam_room_time_map = self._make_exam_room_time_map(appointments)
 
         # trying to get an exam room which doesn't have a requested time
         for exam_room, scheduled_times in exam_room_time_map.items():
-            if str not in scheduled_times:
+            if schedule_time not in scheduled_times:
                 return exam_room
 
         raise AppointmentException('No open appointments found for these parameters')

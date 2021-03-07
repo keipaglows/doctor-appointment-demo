@@ -7,5 +7,5 @@ def get_and_validate_schema(schema: Schema, request: Request, many=None):
 
     try:
         return schema().load(data, many=many)
-    except ValidationError as e:
-        raise HTTPUnprocessableEntity(e.messages) from e
+    except ValidationError as exc:
+        raise HTTPUnprocessableEntity(exc.messages) from exc

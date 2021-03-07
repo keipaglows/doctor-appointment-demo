@@ -1,9 +1,9 @@
-import falcon
-import requests
 import webbrowser
 
+import falcon
+
 from doctor_appointment_demo import core, resources
-from doctor_appointment_demo.middlewares.session import SessionMiddleware 
+from doctor_appointment_demo.middlewares.session import SessionMiddleware
 from doctor_appointment_demo.middlewares.cors import CORSMiddleware
 
 
@@ -26,7 +26,7 @@ def open_drchrono_auth_page():
     webbrowser.open(core.DR_CHRONO_OAUTH2_AUTH_URL)
 
 
-def http_422_handler(req, resp, ex, params):
+def http_422_handler(_req: falcon.Request, resp: falcon.Response, ex: Exception, _params: dict):
     resp.status = ex.status
     errors = [ex.title] if isinstance(ex.title, list) else ex.title
 

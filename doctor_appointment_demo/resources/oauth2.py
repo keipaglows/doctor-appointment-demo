@@ -1,3 +1,4 @@
+import falcon
 import requests
 
 from doctor_appointment_demo import core
@@ -5,7 +6,7 @@ from doctor_appointment_demo import core
 
 class OAuth2AuthCallbackDocument:
 
-    def on_get(self, req, resp):
+    def on_get(self, req: falcon.Request, _resp: falcon.Response):
         response = requests.post(f'{core.DR_CHRONO_HOST}/o/token/', data={
             'code': req.params['code'],
             'grant_type': 'authorization_code',

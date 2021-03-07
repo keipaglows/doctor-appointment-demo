@@ -1,3 +1,4 @@
+import falcon
 from marshmallow import fields, validate, Schema
 
 from doctor_appointment_demo.core import DR_CHRONO_HOST
@@ -13,7 +14,7 @@ class OfficeCollection:
 
     offices_url: str = f'{DR_CHRONO_HOST}/api/offices'
 
-    def on_get(self, req, resp):
+    def on_get(self, req: falcon.Request, resp: falcon.Response):
         params = get_and_validate_schema(OfficesGetSchema, req)
 
         response = req.context.session.get(self.offices_url, params={
