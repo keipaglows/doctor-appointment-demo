@@ -11,19 +11,21 @@ class AppointmentService:
 
     appointments_url: str = f'{DR_CHRONO_HOST}/api/appointments'
     patients_url: str = f'{DR_CHRONO_HOST}/api/patients'
+    offices_url: str = f'{DR_CHRONO_HOST}/api/offices'
 
     def make_and_get_an_appoinment(self, params: dict, session: Session):
-        date = params['date'].isoformat()
-        time = params['time'].isoformat()
+        date = params['scheduled_datetime'].date().isoformat()
+        time = params['scheduled_datetime'].time().isoformat()
 
         appointments = self._get_office_appointments(params, session)
-        exam_room_id = self._get_exam_room_id(time, appointments)
+        office = self._get_office(params['office_id'], session)
+        free_exam_room_id = self._get_free_exam_room_id(time, office['exam_rooms'], appointments)
         patient_id = self._get_patient_id(params, session)
 
         appointment_response = session.post(self.appointments_url, data={
             'doctor': params['doctor_id'],
             'office': params['office_id'],
-            'exam_room': exam_room_id,
+            'exam_room': free_exam_room_id,
             'patient': patient_id,
             'scheduled_time': f'{date}T{time}',
             'duration': 30  # in minutes
@@ -39,7 +41,7 @@ class AppointmentService:
         office_appointments_response = session.get(self.appointments_url, params={
             'doctor': params['doctor_id'],
             'office': params['office_id'],
-            'date': params['date'].isoformat()
+            'date': params['scheduled_datetime'].date().isoformat()
         })
 
         if office_appointments_response:
@@ -47,15 +49,31 @@ class AppointmentService:
 
         raise AppointmentException('Could not receive appointments')
 
-    def _get_exam_room_id(self, schedule_time: str, appointments: List[dict]) -> int:
-        exam_room_time_map = self._make_exam_room_time_map(appointments)
+    def _get_office(self, office_id: int, session: Session) -> dict:
+        office_response = session.get(f'{self.offices_url}/{office_id}')
 
-        # trying to get an exam room which doesn't have a requested time
-        for exam_room, scheduled_times in exam_room_time_map.items():
-            if schedule_time not in scheduled_times:
-                return exam_room
+        if office_response:
+            return office_response.json()
 
-        raise AppointmentException('No open appointments found for these parameters')
+        raise AppointmentException('Could not receive office info')
+
+    # pylint: disable=inconsistent-return-statements
+    def _get_free_exam_room_id(self,
+                               schedule_time: str,
+                               exam_rooms: List[dict],
+                               appointments: List[dict]) -> int:
+        exam_rooms_schedule = self._make_exam_rooms_schedule(appointments)
+
+        for exam_room in exam_rooms:
+            exam_room_id = exam_room['index']
+
+            if room_schedule := exam_rooms_schedule.get(exam_room_id):
+                # checking if requested time is open for this room
+                if schedule_time not in room_schedule:
+                    return exam_room_id
+            else:
+                # if there were no schedule for this room, return it's id
+                return exam_room_id
 
     def _get_patient_id(self, params: dict, session: Session) -> int:
         patients_response = session.get(
@@ -80,19 +98,19 @@ class AppointmentService:
         raise AppointmentException('Could not receive patient info')
 
     @staticmethod
-    def _make_exam_room_time_map(appointments: List[dict]) -> Dict[int, List[str]]:
-        exam_room_time_map = defaultdict(dict)
+    def _make_exam_rooms_schedule(appointments: List[dict]) -> Dict[int, List[str]]:
+        exam_rooms_schedule = defaultdict(dict)
 
         for appointment in appointments:
             exam_room = appointment['exam_room']
             scheduled_time = appointment['scheduled_time'].split('T')[1]
 
-            if not exam_room_time_map[exam_room]:
-                exam_room_time_map[exam_room] = []
+            if not exam_rooms_schedule[exam_room]:
+                exam_rooms_schedule[exam_room] = []
 
-            exam_room_time_map[exam_room].append(scheduled_time)
+            exam_rooms_schedule[exam_room].append(scheduled_time)
 
-        return exam_room_time_map
+        return exam_rooms_schedule
 
 
 appointment_service = AppointmentService()

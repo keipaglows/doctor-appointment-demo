@@ -1,6 +1,4 @@
 
-from datetime import date, time
-
 import falcon
 from marshmallow import fields, validate, Schema
 
@@ -24,8 +22,7 @@ class AppointmentPostSchema(Schema):
 
     doctor_id = fields.Integer(required=True, validate=validate.Range(min=0))
     office_id = fields.Integer(required=True, validate=validate.Range(min=0))
-    date = fields.Date(missing=date.today())
-    time = fields.Time(missing=time(9))
+    scheduled_datetime = fields.DateTime()
     patient = fields.Nested(PatientSchema, required=True)
 
 
@@ -41,4 +38,4 @@ class AppointmentCollection:
                 params, req.context.session
             )
         except AppointmentException as exc:
-            raise falcon.HTTPUnprocessableEntity(exc.args[0]) from exc
+            raise falcon.HTTPUnprocessableEntity({'appointment_error': exc.args[0]}) from exc
